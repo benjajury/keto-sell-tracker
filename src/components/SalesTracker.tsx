@@ -103,9 +103,10 @@ export default function SalesTracker() {
       if (error) throw error;
       setSales((data || []) as Sale[]);
     } catch (error) {
+      console.error("Sales fetch error:", error);
       toast({
-        title: "Error",
-        description: "Failed to fetch sales",
+        title: "Error", 
+        description: `Failed to fetch sales: ${error.message}`,
         variant: "destructive",
       });
     }
