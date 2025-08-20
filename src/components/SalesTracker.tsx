@@ -503,43 +503,43 @@ export default function SalesTracker() {
           </Card>
         </div>
 
-        {/* Recent Sales */}
-        <Card className="bg-gradient-card shadow-elegant animate-slide-up [animation-delay:600ms]">
-          <CardHeader>
-            <CardTitle>Recent Sales</CardTitle>
-            <CardDescription>Latest orders and their status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {sales.slice(0, 10).map((sale) => (
-                <div key={sale.id} className="p-4 rounded-lg bg-background border hover:shadow-md transition-shadow">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <h3 className="font-medium text-foreground">{sale.customer_name}</h3>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          sale.status === 'fulfilled' 
-                            ? 'bg-success text-success-foreground' 
-                            : 'bg-warning text-warning-foreground'
-                        }`}>
-                          {sale.status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
-                        </span>
+        {/* Orders Management */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Orders to Fulfill */}
+          <Card className="bg-gradient-card shadow-elegant animate-slide-up [animation-delay:600ms]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-warning" />
+                Orders to Fulfill
+              </CardTitle>
+              <CardDescription>Pending orders that need to be completed</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {sales.filter(sale => sale.status === 'not_fulfilled').map((sale) => (
+                  <div key={sale.id} className="p-4 rounded-lg bg-background border border-warning/20 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <h3 className="font-medium text-foreground">{sale.customer_name}</h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-warning text-warning-foreground">
+                            Pending
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {sale.sale_items.map((item) => (
+                            <p key={item.id} className="text-sm text-muted-foreground">
+                              {item.quantity}x {item.products.name} - {formatCurrency(item.subtotal)}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(sale.sale_date).toLocaleDateString()}
+                        </p>
                       </div>
-                      <div className="space-y-1">
-                        {sale.sale_items.map((item) => (
-                          <p key={item.id} className="text-sm text-muted-foreground">
-                            {item.quantity}x {item.products.name} - {formatCurrency(item.subtotal)}
-                          </p>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2">
-                        {new Date(sale.sale_date).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-success mb-2">{formatCurrency(sale.total_amount)}</div>
-                      {sale.status === 'not_fulfilled' && (
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-success mb-2">{formatCurrency(sale.total_amount)}</div>
                         <Button 
                           size="sm" 
                           onClick={() => markAsFulfilled(sale.id)}
@@ -548,19 +548,67 @@ export default function SalesTracker() {
                           <Check className="h-3 w-3 mr-1" />
                           Fulfill
                         </Button>
-                      )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              {sales.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  No sales recorded yet. Add your first sale above!
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+                {sales.filter(sale => sale.status === 'not_fulfilled').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No pending orders. Great job!
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Fulfilled Orders */}
+          <Card className="bg-gradient-card shadow-elegant animate-slide-up [animation-delay:700ms]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-success" />
+                Fulfilled Orders
+              </CardTitle>
+              <CardDescription>Recently completed orders</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {sales.filter(sale => sale.status === 'fulfilled').slice(0, 10).map((sale) => (
+                  <div key={sale.id} className="p-4 rounded-lg bg-background border border-success/20 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <h3 className="font-medium text-foreground">{sale.customer_name}</h3>
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-success text-success-foreground">
+                            Fulfilled
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          {sale.sale_items.map((item) => (
+                            <p key={item.id} className="text-sm text-muted-foreground">
+                              {item.quantity}x {item.products.name} - {formatCurrency(item.subtotal)}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(sale.sale_date).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-success">{formatCurrency(sale.total_amount)}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {sales.filter(sale => sale.status === 'fulfilled').length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No fulfilled orders yet.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
