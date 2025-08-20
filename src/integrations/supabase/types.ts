@@ -44,14 +44,14 @@ export type Database = {
         }
         Relationships: []
       }
-      sales: {
+      sale_items: {
         Row: {
           created_at: string
           id: string
           product_id: string
           quantity: number
-          sale_date: string
-          total_amount: number
+          sale_id: string
+          subtotal: number
           unit_price: number
         }
         Insert: {
@@ -59,8 +59,8 @@ export type Database = {
           id?: string
           product_id: string
           quantity: number
-          sale_date?: string
-          total_amount: number
+          sale_id: string
+          subtotal: number
           unit_price: number
         }
         Update: {
@@ -68,19 +68,53 @@ export type Database = {
           id?: string
           product_id?: string
           quantity?: number
-          sale_date?: string
-          total_amount?: number
+          sale_id?: string
+          subtotal?: number
           unit_price?: number
         }
         Relationships: [
           {
-            foreignKeyName: "sales_product_id_fkey"
+            foreignKeyName: "sale_items_product_id_fkey"
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      sales: {
+        Row: {
+          created_at: string
+          customer_name: string
+          id: string
+          sale_date: string
+          status: string
+          total_amount: number
+        }
+        Insert: {
+          created_at?: string
+          customer_name?: string
+          id?: string
+          sale_date?: string
+          status?: string
+          total_amount?: number
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          id?: string
+          sale_date?: string
+          status?: string
+          total_amount?: number
+        }
+        Relationships: []
       }
     }
     Views: {

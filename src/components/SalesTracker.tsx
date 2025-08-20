@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Package, DollarSign, ShoppingCart, Plus } from "lucide-react";
+import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Check, X, User } from "lucide-react";
 
 interface Product {
   id: string;
@@ -16,16 +16,30 @@ interface Product {
   stock: number;
 }
 
-interface Sale {
+interface SaleItem {
   id: string;
+  sale_id: string;
   product_id: string;
   quantity: number;
   unit_price: number;
-  total_amount: number;
-  sale_date: string;
+  subtotal: number;
   products: {
     name: string;
   };
+}
+
+interface Sale {
+  id: string;
+  customer_name: string;
+  status: 'not_fulfilled' | 'fulfilled';
+  total_amount: number;
+  sale_date: string;
+  sale_items: SaleItem[];
+}
+
+interface CartItem {
+  product_id: string;
+  quantity: number;
 }
 
 interface Metrics {
@@ -45,6 +59,8 @@ export default function SalesTracker() {
     totalUnits: 0,
   });
   
+  const [customerName, setCustomerName] = useState<string>("");
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -70,19 +86,22 @@ export default function SalesTracker() {
     }
   };
 
-  // Fetch sales with product names
+  // Fetch sales with sale items
   const fetchSales = async () => {
     try {
       const { data, error } = await supabase
         .from("sales")
         .select(`
           *,
-          products!inner(name)
+          sale_items (
+            *,
+            products (name)
+          )
         `)
         .order("sale_date", { ascending: false });
       
       if (error) throw error;
-      setSales(data || []);
+      setSales((data || []) as Sale[]);
     } catch (error) {
       toast({
         title: "Error",
@@ -96,17 +115,20 @@ export default function SalesTracker() {
   const calculateMetrics = (salesData: Sale[], productsData: Product[]) => {
     const totalSales = salesData.length;
     const totalRevenue = salesData.reduce((sum, sale) => sum + sale.total_amount, 0);
-    const totalUnits = salesData.reduce((sum, sale) => sum + sale.quantity, 0);
     
-    // Calculate profit by finding the cost for each sale
-    const totalProfit = salesData.reduce((sum, sale) => {
-      const product = productsData.find(p => p.id === sale.product_id);
-      if (product) {
-        const saleProfit = (sale.unit_price - product.cost) * sale.quantity;
-        return sum + saleProfit;
-      }
-      return sum;
-    }, 0);
+    let totalUnits = 0;
+    let totalProfit = 0;
+    
+    salesData.forEach(sale => {
+      sale.sale_items.forEach(item => {
+        totalUnits += item.quantity;
+        const product = productsData.find(p => p.id === item.product_id);
+        if (product) {
+          const itemProfit = (item.unit_price - product.cost) * item.quantity;
+          totalProfit += itemProfit;
+        }
+      });
+    });
 
     setMetrics({
       totalSales,
@@ -116,10 +138,8 @@ export default function SalesTracker() {
     });
   };
 
-  // Handle new sale
-  const handleSaleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  // Add item to cart
+  const addToCart = () => {
     if (!selectedProduct || !quantity) {
       toast({
         title: "Error",
@@ -130,14 +150,7 @@ export default function SalesTracker() {
     }
 
     const product = products.find(p => p.id === selectedProduct);
-    if (!product) {
-      toast({
-        title: "Error",
-        description: "Selected product not found",
-        variant: "destructive",
-      });
-      return;
-    }
+    if (!product) return;
 
     const qty = parseInt(quantity);
     if (qty <= 0 || qty > product.stock) {
@@ -149,28 +162,98 @@ export default function SalesTracker() {
       return;
     }
 
+    const existingItem = cart.find(item => item.product_id === selectedProduct);
+    if (existingItem) {
+      setCart(cart.map(item => 
+        item.product_id === selectedProduct 
+          ? { ...item, quantity: item.quantity + qty }
+          : item
+      ));
+    } else {
+      setCart([...cart, { product_id: selectedProduct, quantity: qty }]);
+    }
+
+    setSelectedProduct("");
+    setQuantity("");
+  };
+
+  // Remove item from cart
+  const removeFromCart = (productId: string) => {
+    setCart(cart.filter(item => item.product_id !== productId));
+  };
+
+  // Calculate cart total
+  const getCartTotal = () => {
+    return cart.reduce((total, item) => {
+      const product = products.find(p => p.id === item.product_id);
+      return total + (product ? product.price * item.quantity : 0);
+    }, 0);
+  };
+
+  // Handle new sale
+  const handleSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!customerName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter customer name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (cart.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add items to cart",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
+      // Create sale
+      const { data: saleData, error: saleError } = await supabase
         .from("sales")
         .insert({
-          product_id: selectedProduct,
-          quantity: qty,
-          unit_price: product.price,
-          total_amount: product.price * qty,
-        });
+          customer_name: customerName.trim(),
+          total_amount: getCartTotal(),
+          status: 'not_fulfilled'
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (saleError) throw saleError;
+
+      // Create sale items
+      const saleItems = cart.map(item => {
+        const product = products.find(p => p.id === item.product_id);
+        return {
+          sale_id: saleData.id,
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_price: product?.price || 0,
+          subtotal: (product?.price || 0) * item.quantity
+        };
+      });
+
+      const { error: itemsError } = await supabase
+        .from("sale_items")
+        .insert(saleItems);
+
+      if (itemsError) throw itemsError;
 
       toast({
         title: "Success!",
-        description: `Sale recorded: ${qty} x ${product.name}`,
+        description: `Sale recorded for ${customerName}`,
       });
 
       // Reset form
-      setSelectedProduct("");
-      setQuantity("");
+      setCustomerName("");
+      setCart([]);
       
       // Refresh data
       fetchProducts();
@@ -183,6 +266,31 @@ export default function SalesTracker() {
       });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Mark sale as fulfilled
+  const markAsFulfilled = async (saleId: string) => {
+    try {
+      const { error } = await supabase
+        .from("sales")
+        .update({ status: 'fulfilled' })
+        .eq('id', saleId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: "Order marked as fulfilled",
+      });
+
+      fetchSales();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update order status",
+        variant: "destructive",
+      });
     }
   };
 
@@ -297,43 +405,86 @@ export default function SalesTracker() {
                 <Plus className="h-5 w-5 text-primary" />
                 Record New Sale
               </CardTitle>
-              <CardDescription>Add a new product sale</CardDescription>
+              <CardDescription>Add a new customer order</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSaleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="product">Product</Label>
-                  <Select value={selectedProduct} onValueChange={setSelectedProduct}>
-                    <SelectTrigger className="bg-background">
-                      <SelectValue placeholder="Select a product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} - {formatCurrency(product.price)} (Stock: {product.stock})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="quantity">Quantity</Label>
+                  <Label htmlFor="customer">Customer Name</Label>
                   <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    placeholder="Enter quantity"
+                    id="customer"
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Enter customer name"
                     className="bg-background"
                   />
                 </div>
 
+                <div className="space-y-4">
+                  <Label>Add Products</Label>
+                  <div className="flex gap-2">
+                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                      <SelectTrigger className="bg-background flex-1">
+                        <SelectValue placeholder="Select product" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name} - {formatCurrency(product.price)} (Stock: {product.stock})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      placeholder="Qty"
+                      className="bg-background w-20"
+                    />
+                    <Button type="button" onClick={addToCart} variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Cart */}
+                {cart.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Order Items</Label>
+                    <div className="space-y-2 max-h-40 overflow-y-auto">
+                      {cart.map((item) => {
+                        const product = products.find(p => p.id === item.product_id);
+                        return (
+                          <div key={item.product_id} className="flex items-center justify-between p-2 bg-background border rounded">
+                            <span className="text-sm">{product?.name} x {item.quantity}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{formatCurrency((product?.price || 0) * item.quantity)}</span>
+                              <Button 
+                                type="button" 
+                                size="sm" 
+                                variant="destructive" 
+                                onClick={() => removeFromCart(item.product_id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <span className="font-medium">Total:</span>
+                      <span className="font-bold text-lg">{formatCurrency(getCartTotal())}</span>
+                    </div>
+                  </div>
+                )}
+
                 <Button 
                   type="submit" 
                   className="w-full bg-gradient-primary hover:opacity-90 transition-all duration-300"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || cart.length === 0}
                 >
                   {isSubmitting ? "Recording..." : "Record Sale"}
                 </Button>
@@ -346,21 +497,49 @@ export default function SalesTracker() {
         <Card className="bg-gradient-card shadow-elegant animate-slide-up [animation-delay:600ms]">
           <CardHeader>
             <CardTitle>Recent Sales</CardTitle>
-            <CardDescription>Latest transactions</CardDescription>
+            <CardDescription>Latest orders and their status</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {sales.slice(0, 10).map((sale) => (
-                <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg bg-background border hover:shadow-md transition-shadow">
-                  <div>
-                    <h3 className="font-medium text-foreground">{sale.products.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {new Date(sale.sale_date).toLocaleDateString()} - {sale.quantity} units
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-success">{formatCurrency(sale.total_amount)}</div>
-                    <div className="text-sm text-muted-foreground">{formatCurrency(sale.unit_price)}/unit</div>
+                <div key={sale.id} className="p-4 rounded-lg bg-background border hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <h3 className="font-medium text-foreground">{sale.customer_name}</h3>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          sale.status === 'fulfilled' 
+                            ? 'bg-success text-success-foreground' 
+                            : 'bg-warning text-warning-foreground'
+                        }`}>
+                          {sale.status === 'fulfilled' ? 'Fulfilled' : 'Pending'}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        {sale.sale_items.map((item) => (
+                          <p key={item.id} className="text-sm text-muted-foreground">
+                            {item.quantity}x {item.products.name} - {formatCurrency(item.subtotal)}
+                          </p>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        {new Date(sale.sale_date).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-success mb-2">{formatCurrency(sale.total_amount)}</div>
+                      {sale.status === 'not_fulfilled' && (
+                        <Button 
+                          size="sm" 
+                          onClick={() => markAsFulfilled(sale.id)}
+                          className="bg-gradient-primary hover:opacity-90"
+                        >
+                          <Check className="h-3 w-3 mr-1" />
+                          Fulfill
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
