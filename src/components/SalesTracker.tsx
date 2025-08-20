@@ -215,7 +215,13 @@ export default function SalesTracker() {
     setIsSubmitting(true);
 
     try {
+      console.log("=== DEBUG: Starting sale creation ===");
+      console.log("Customer name:", customerName.trim());
+      console.log("Cart total:", getCartTotal());
+      console.log("Cart items:", cart);
+      
       // Create sale
+      console.log("=== DEBUG: Creating sale record ===");
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
         .insert({
@@ -225,6 +231,10 @@ export default function SalesTracker() {
         })
         .select()
         .single();
+
+      console.log("=== DEBUG: Sale creation result ===");
+      console.log("Sale data:", saleData);
+      console.log("Sale error:", saleError);
 
       if (saleError) throw saleError;
 
