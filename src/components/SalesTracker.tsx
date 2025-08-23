@@ -280,6 +280,41 @@ export default function SalesTracker() {
     }
   };
 
+  // Add stock to product
+  const addStock = async (productId: string) => {
+    try {
+      // First get current stock
+      const { data: product, error: fetchError } = await supabase
+        .from("products")
+        .select("stock")
+        .eq('id', productId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Update with new stock value
+      const { error } = await supabase
+        .from("products")
+        .update({ stock: product.stock + 10 })
+        .eq('id', productId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: "Added 10 units to stock",
+      });
+
+      fetchProducts();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stock",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Mark sale as fulfilled
   const markAsFulfilled = async (saleId: string) => {
     try {
@@ -299,7 +334,7 @@ export default function SalesTracker() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update order status",
+        description: error.message || "Failed to update stock",
         variant: "destructive",
       });
     }
@@ -392,17 +427,28 @@ export default function SalesTracker() {
             <CardContent className="space-y-4">
               {products.map((product) => (
                 <div key={product.id} className="flex items-center justify-between p-3 rounded-lg bg-background border">
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-medium text-foreground">{product.name}</h3>
                     <p className="text-sm text-muted-foreground">
                       Price: {formatCurrency(product.price)} | Cost: {formatCurrency(product.cost)}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <div className={`text-lg font-bold ${product.stock <= 5 ? 'text-destructive' : 'text-success'}`}>
-                      {product.stock}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className={`text-lg font-bold ${product.stock <= 5 ? 'text-destructive' : 'text-success'}`}>
+                        {product.stock}
+                      </div>
+                      <div className="text-sm text-muted-foreground">units</div>
                     </div>
-                    <div className="text-sm text-muted-foreground">units</div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => addStock(product.id)}
+                      className="flex items-center gap-1"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add
+                    </Button>
                   </div>
                 </div>
               ))}
