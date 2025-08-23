@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Check, X, User } from "lucide-react";
 
@@ -64,6 +65,11 @@ export default function SalesTracker() {
   const [selectedProduct, setSelectedProduct] = useState<string>("");
   const [quantity, setQuantity] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Stock addition dialog state
+  const [stockDialogOpen, setStockDialogOpen] = useState(false);
+  const [selectedStockProduct, setSelectedStockProduct] = useState<string>("");
+  const [stockAmountToAdd, setStockAmountToAdd] = useState<string>("10");
   
   const { toast } = useToast();
 
@@ -280,14 +286,31 @@ export default function SalesTracker() {
     }
   };
 
+  // Open stock dialog
+  const openStockDialog = (productId: string) => {
+    setSelectedStockProduct(productId);
+    setStockAmountToAdd("10");
+    setStockDialogOpen(true);
+  };
+
   // Add stock to product
-  const addStock = async (productId: string) => {
+  const addStock = async () => {
+    const amount = parseInt(stockAmountToAdd);
+    if (!amount || amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       // First get current stock
       const { data: product, error: fetchError } = await supabase
         .from("products")
         .select("stock")
-        .eq('id', productId)
+        .eq('id', selectedStockProduct)
         .single();
 
       if (fetchError) throw fetchError;
@@ -295,16 +318,19 @@ export default function SalesTracker() {
       // Update with new stock value
       const { error } = await supabase
         .from("products")
-        .update({ stock: product.stock + 10 })
-        .eq('id', productId);
+        .update({ stock: product.stock + amount })
+        .eq('id', selectedStockProduct);
 
       if (error) throw error;
 
       toast({
         title: "Success!",
-        description: "Added 10 units to stock",
+        description: `Added ${amount} units to stock`,
       });
 
+      setStockDialogOpen(false);
+      setSelectedStockProduct("");
+      setStockAmountToAdd("10");
       fetchProducts();
     } catch (error: any) {
       toast({
@@ -440,15 +466,52 @@ export default function SalesTracker() {
                       </div>
                       <div className="text-sm text-muted-foreground">units</div>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => addStock(product.id)}
-                      className="flex items-center gap-1"
-                    >
-                      <Plus className="h-3 w-3" />
-                      Add
-                    </Button>
+                    <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openStockDialog(product.id)}
+                          className="flex items-center gap-1"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Add
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add Stock</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="stockAmount">Amount to add</Label>
+                            <Input
+                              id="stockAmount"
+                              type="number"
+                              min="1"
+                              value={stockAmountToAdd}
+                              onChange={(e) => setStockAmountToAdd(e.target.value)}
+                              placeholder="Enter amount"
+                              className="bg-background"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={addStock}
+                              className="flex-1 bg-gradient-primary hover:opacity-90"
+                            >
+                              Add Stock
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => setStockDialogOpen(false)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               ))}
