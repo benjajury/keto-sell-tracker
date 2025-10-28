@@ -682,7 +682,7 @@ export default function SalesTracker() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {sales.filter(sale => sale.status === 'fulfilled').slice(0, 10).map((sale) => (
+                {sales.filter(sale => sale.status === 'fulfilled').map((sale) => (
                   <div key={sale.id} className="p-4 rounded-lg bg-background border border-success/20 hover:shadow-md transition-shadow">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
