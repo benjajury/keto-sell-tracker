@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Minus, Check, X, User } from "lucide-react";
+import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Minus, Check, X, User, Trash2 } from "lucide-react";
 
 interface Product {
   id: string;
@@ -436,6 +436,67 @@ export default function SalesTracker() {
     }
   };
 
+  // Delete unfulfilled order and restore stock
+  const deleteOrder = async (saleId: string) => {
+    try {
+      // First, fetch the sale items to restore stock
+      const { data: saleItems, error: fetchError } = await supabase
+        .from("sale_items")
+        .select("product_id, quantity")
+        .eq('sale_id', saleId);
+
+      if (fetchError) throw fetchError;
+
+      // Restore stock for each product
+      for (const item of saleItems || []) {
+        const { data: product, error: productError } = await supabase
+          .from("products")
+          .select("stock")
+          .eq('id', item.product_id)
+          .single();
+
+        if (productError) throw productError;
+
+        const { error: updateError } = await supabase
+          .from("products")
+          .update({ stock: product.stock + item.quantity })
+          .eq('id', item.product_id);
+
+        if (updateError) throw updateError;
+      }
+
+      // Delete sale items
+      const { error: itemsError } = await supabase
+        .from("sale_items")
+        .delete()
+        .eq('sale_id', saleId);
+
+      if (itemsError) throw itemsError;
+
+      // Delete the sale
+      const { error: saleError } = await supabase
+        .from("sales")
+        .delete()
+        .eq('id', saleId);
+
+      if (saleError) throw saleError;
+
+      toast({
+        title: "Success!",
+        description: "Order deleted and stock restored",
+      });
+
+      fetchProducts();
+      fetchSales();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete order",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('es-CO', {
@@ -766,16 +827,25 @@ export default function SalesTracker() {
                           {new Date(sale.sale_date).toLocaleDateString()}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold text-success mb-2">{formatCurrency(sale.total_amount)}</div>
-                        <Button 
-                          size="sm" 
-                          onClick={() => markAsFulfilled(sale.id)}
-                          className="bg-gradient-primary hover:opacity-90"
-                        >
-                          <Check className="h-3 w-3 mr-1" />
-                          Fulfill
-                        </Button>
+                      <div className="text-right space-y-2">
+                        <div className="text-lg font-bold text-success">{formatCurrency(sale.total_amount)}</div>
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            onClick={() => markAsFulfilled(sale.id)}
+                            className="bg-gradient-primary hover:opacity-90"
+                          >
+                            <Check className="h-3 w-3 mr-1" />
+                            Fulfill
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="destructive"
+                            onClick={() => deleteOrder(sale.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
