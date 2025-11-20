@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Check, X, User } from "lucide-react";
+import { TrendingUp, Package, DollarSign, ShoppingCart, Plus, Minus, Check, X, User } from "lucide-react";
 
 interface Product {
   id: string;
@@ -70,6 +70,11 @@ export default function SalesTracker() {
   const [stockDialogOpen, setStockDialogOpen] = useState(false);
   const [selectedStockProduct, setSelectedStockProduct] = useState<string>("");
   const [stockAmountToAdd, setStockAmountToAdd] = useState<string>("10");
+  
+  // Stock removal dialog state
+  const [removeStockDialogOpen, setRemoveStockDialogOpen] = useState(false);
+  const [selectedRemoveStockProduct, setSelectedRemoveStockProduct] = useState<string>("");
+  const [stockAmountToRemove, setStockAmountToRemove] = useState<string>("10");
   
   const { toast } = useToast();
 
@@ -335,7 +340,72 @@ export default function SalesTracker() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to update stock",
+        description: error.message || "Failed to add stock",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Open remove stock dialog
+  const openRemoveStockDialog = (productId: string) => {
+    setSelectedRemoveStockProduct(productId);
+    setStockAmountToRemove("10");
+    setRemoveStockDialogOpen(true);
+  };
+
+  // Remove stock from product
+  const removeStock = async () => {
+    const amount = parseInt(stockAmountToRemove);
+    if (!amount || amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please enter a valid amount",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // First get current stock
+      const { data: product, error: fetchError } = await supabase
+        .from("products")
+        .select("stock")
+        .eq('id', selectedRemoveStockProduct)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const newStock = product.stock - amount;
+      if (newStock < 0) {
+        toast({
+          title: "Error",
+          description: "Cannot remove more stock than available",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Update with new stock value
+      const { error } = await supabase
+        .from("products")
+        .update({ stock: newStock })
+        .eq('id', selectedRemoveStockProduct);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: `Removed ${amount} units from stock`,
+      });
+
+      setRemoveStockDialogOpen(false);
+      setSelectedRemoveStockProduct("");
+      setStockAmountToRemove("10");
+      fetchProducts();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove stock",
         variant: "destructive",
       });
     }
@@ -466,52 +536,100 @@ export default function SalesTracker() {
                       </div>
                       <div className="text-sm text-muted-foreground">units</div>
                     </div>
-                    <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openStockDialog(product.id)}
-                          className="flex items-center gap-1"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Add
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Add Stock</DialogTitle>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="stockAmount">Amount to add</Label>
-                            <Input
-                              id="stockAmount"
-                              type="number"
-                              min="1"
-                              value={stockAmountToAdd}
-                              onChange={(e) => setStockAmountToAdd(e.target.value)}
-                              placeholder="Enter amount"
-                              className="bg-background"
-                            />
+                    <div className="flex gap-2">
+                      <Dialog open={stockDialogOpen} onOpenChange={setStockDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openStockDialog(product.id)}
+                            className="flex items-center gap-1"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Add
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add Stock</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="stockAmount">Amount to add</Label>
+                              <Input
+                                id="stockAmount"
+                                type="number"
+                                min="1"
+                                value={stockAmountToAdd}
+                                onChange={(e) => setStockAmountToAdd(e.target.value)}
+                                placeholder="Enter amount"
+                                className="bg-background"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={addStock}
+                                className="flex-1 bg-gradient-primary hover:opacity-90"
+                              >
+                                Add Stock
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => setStockDialogOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex gap-2">
-                            <Button
-                              onClick={addStock}
-                              className="flex-1 bg-gradient-primary hover:opacity-90"
-                            >
-                              Add Stock
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => setStockDialogOpen(false)}
-                            >
-                              Cancel
-                            </Button>
+                        </DialogContent>
+                      </Dialog>
+                      <Dialog open={removeStockDialogOpen} onOpenChange={setRemoveStockDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRemoveStockDialog(product.id)}
+                            className="flex items-center gap-1"
+                          >
+                            <Minus className="h-3 w-3" />
+                            Remove
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Remove Stock</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="removeStockAmount">Amount to remove</Label>
+                              <Input
+                                id="removeStockAmount"
+                                type="number"
+                                min="1"
+                                value={stockAmountToRemove}
+                                onChange={(e) => setStockAmountToRemove(e.target.value)}
+                                placeholder="Enter amount"
+                                className="bg-background"
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={removeStock}
+                                className="flex-1 bg-gradient-primary hover:opacity-90"
+                              >
+                                Remove Stock
+                              </Button>
+                              <Button
+                                variant="outline"
+                                onClick={() => setRemoveStockDialogOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                           </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   </div>
                 </div>
               ))}
